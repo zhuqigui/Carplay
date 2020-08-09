@@ -70,7 +70,7 @@ import static com.third.zoom.ytbus.utils.Contans.COM_30;
         hasToolbar = false
 )
 public class MainActivity extends BaseActivity {
-
+    private static final String TAG="zhu_test";
     private static final int WHAT_OPEN_SERIAL = 10;
     private static final int WHAT_PLAY_AD = 11;
     private static final int WHAT_PLAY_TEXT = 12;
@@ -81,15 +81,16 @@ public class MainActivity extends BaseActivity {
     private static final String SP_KEY_PLAY_DIR = "playDir";
     private static final String SP_KEY_PLAY_PATH = "playPath";
     private static final String SP_KEY_PLAY_TIME = "playTime";
+    private static final String SP_KEY_IS_PLAYING_AD="isPlayingAD";
     //文件夹名
-    private String CURRENT_VIDEO_FILE_DIR = "VIDEO1";
+    private String CURRENT_VIDEO_FILE_DIR = "VIDEO";
     private static final String[] VIDEO_FILE_DIRS = {"VIDEO1","VIDEO2",
             "VIDEO3","VIDEO4",
             "VIDEO5","VIDEO6",
             "VIDEO7","VIDEO8",
             "VIDEO9","VIDEO10",
             "VIDEO11","VIDEO12"};
-    private static final String DEFAULT_VIDEO_FILE_DIR = "VIDEO1";
+    private static final String DEFAULT_VIDEO_FILE_DIR = "VIDEO";
     private static final String YT_AD_FILE_DIR = "AD";
     private static final String FIRST_PLAY_AD = "AD001";
     //配置数据
@@ -111,6 +112,7 @@ public class MainActivity extends BaseActivity {
     private int TEXT_TIME = 20 * 1000;
     //字幕内容
     private String textContent;
+    private String IS_PLAY_AD;
 
     private YTVideoView ytVideoView;
     private MarqueeTextViewV2 ytAdTextView;
@@ -170,6 +172,7 @@ public class MainActivity extends BaseActivity {
         mHandler.sendEmptyMessageDelayed(WHAT_OPEN_SERIAL,2000);
 
         ytFileRootPath = Environment.getExternalStorageDirectory().getAbsolutePath();
+        Log.i(TAG,"initDataAfterFindView ytFileRootPath=="+ytFileRootPath);
         configFileInit(ytFileRootPath);
 
         parseFile();
@@ -199,6 +202,7 @@ public class MainActivity extends BaseActivity {
      * 取消message，记录播放路径跟位置
      */
     private void doOnPauseThings() {
+        Log.i(TAG,"doOnPauseThings...");
         mHandler.removeMessages(WHAT_CURRENT_PLAY_TIME);
         runADTimer(false);
         runTextTimer(false);
@@ -216,15 +220,54 @@ public class MainActivity extends BaseActivity {
             }
         }
     }
-
+    public void saveVideoViewPosition(){
+        if (ytVideoView != null) {
+            if (ytVideoView.isPlaying()) {
+                tempPlayPath = ytVideoView.getVideoPath();
+                if(TextUtils.isEmpty(tempPlayPath) || isADVideo(tempPlayPath)){
+                    return;
+                }
+                tempPlayPosition = ytVideoView.getCurrentPosition();
+                PreferenceUtils.commitString(SP_KEY_PLAY_PATH, tempPlayPath);
+                if (tempPlayPosition > 0) {
+                    PreferenceUtils.commitInt(SP_KEY_PLAY_TIME, tempPlayPosition);
+                }
+            }
+        }
+    }
     private void doOnResumeThings() {
         mHandler.sendEmptyMessageDelayed(WHAT_CURRENT_PLAY_TIME,3000);
         tempPlayPath = PreferenceUtils.getString(SP_KEY_PLAY_PATH, "");
         tempPlayPosition = PreferenceUtils.getInt(SP_KEY_PLAY_TIME, 0);
         runTextTimer(true);
+        Log.i(TAG,"doOnResumeThings tempPlayPath..."+tempPlayPath+",tempPlayPosition=="+tempPlayPosition);
+        Log.i(TAG,"doOnResumeThings isFirst..."+isFirst+",IS_PLAY_AD="+IS_PLAY_AD);
         if(isFirst){
             isFirst = false;
-            playFirstAD();
+            if(IS_PLAY_AD.equals("1")){
+                Log.i(TAG,"doOnResumeThings 强制播放开机广告为1，playFirstAD");
+                playFirstAD();
+            }else {
+                ytFileRootPath = "/storage/card";
+                String urlPath = getIntent().getStringExtra("selectPath");
+                if (TextUtils.isEmpty(urlPath)) {
+                    if (TextUtils.isEmpty(tempPlayPath)) {
+                        String next = getRandomVideoPath(CURRENT_VIDEO_FILE_DIR);
+                        if (TextUtils.isEmpty(next)) {
+                            someError(NOT_VIDEO + "233");
+                            return;
+                        } else {
+                            ytVideoView.setVideoPath(next);
+                        }
+                    } else {
+                        ytVideoView.setVideoPath(tempPlayPath);
+                        if (tempPlayPosition > 0) {
+                            ytVideoView.seekTo(tempPlayPosition);
+                        }
+                    }
+                }
+            }
+            //runADTimer(true);
         }else{
             runADTimer(true);
             String urlPath = getIntent().getStringExtra("selectPath");
@@ -272,7 +315,9 @@ public class MainActivity extends BaseActivity {
     private String YTBusConfigFilePath = "/YTBus/ytConfig.xml";
     private String PLAY_VIDEO_PATH = "";
     private void parseFile(){
+        Log.i(TAG,"parseFile...");
         String lastDir = PreferenceUtils.getString(SP_KEY_PLAY_DIR,"");
+        Log.i(TAG,"parseFile lastDir=="+lastDir);
         if(TextUtils.isEmpty(lastDir)){
             CURRENT_VIDEO_FILE_DIR = DEFAULT_VIDEO_FILE_DIR;
         }else{
@@ -285,17 +330,23 @@ public class MainActivity extends BaseActivity {
             TEXT_TIME = Integer.valueOf(playDataBean.getTextDuration()) * 1000;
             textContent = playDataBean.getTextContent();
             PLAY_VIDEO_PATH = playDataBean.getPlayVideoPath();
+            //zhu add
+            IS_PLAY_AD= playDataBean.getIsPlayAD();
 
             //判断盘是否存在,不存在默认为内部
             if(!TextUtils.isEmpty(PLAY_VIDEO_PATH)){
                 String[] mountPaths = MountUtils.getStorageList(this);
+                Log.i(TAG,"parseFile mountPaths.length=="+mountPaths.length);
                 if(mountPaths != null && mountPaths.length > 1){
                     String mountPath = mountPaths[1];
-                    ytFileRootPath = mountPath;
+                    //ytFileRootPath = mountPath;
+                    Log.i(TAG,"parseFile ytFileRootPath=="+ytFileRootPath);
                     configFileInit(ytFileRootPath);
                     tempPlayPath = PreferenceUtils.getString(SP_KEY_PLAY_PATH, "");
                     tempPlayPosition = PreferenceUtils.getInt(SP_KEY_PLAY_TIME, 0);
+                    Log.i(TAG,"parseFile tempPlayPath=="+tempPlayPath+",tempPlayPosition=="+tempPlayPosition);
                     if(!TextUtils.isEmpty(tempPlayPath)){
+                        Log.i(TAG,"parseFile !tempPlayPath.contains(ytFileRootPath)=="+!tempPlayPath.contains(ytFileRootPath));
                         if(!tempPlayPath.contains(ytFileRootPath)){
                             CURRENT_VIDEO_FILE_DIR = DEFAULT_VIDEO_FILE_DIR;
                             tempPlayPath = "";
@@ -310,11 +361,19 @@ public class MainActivity extends BaseActivity {
                     }
                 }else{
                     String cvfd = getRandomVideoPath(CURRENT_VIDEO_FILE_DIR);
+                    Log.i(TAG,"parseFile cvfd=="+cvfd);
                     if(TextUtils.isEmpty(cvfd)){
                         CURRENT_VIDEO_FILE_DIR = DEFAULT_VIDEO_FILE_DIR;
                     }
                 }
             }
+
+            //zhu add 假如是强制播放广告就播放广告
+            Log.i(TAG,"IS_PLAY_AD=="+IS_PLAY_AD);
+//            if(IS_PLAY_AD.equals("1")){
+//                Log.i(TAG,"IS_PLAY_AD==1 start play AD...");
+//                runADTimer(true);
+//            }
 
         }catch (FileNotFoundException e) {
             e.printStackTrace();
@@ -325,6 +384,8 @@ public class MainActivity extends BaseActivity {
 
     //开机播放AD001
     private void playFirstAD(){
+        //zhu add播放开机广告，存放正在播放状态，不响应按键操作
+        PreferenceUtils.commitBoolean(SP_KEY_IS_PLAYING_AD,true);
         String[] temps = {".mp4", ".rmvb", ".avi", ".flv", ".mkv"};
         String exist = "";
         for (String temp : temps) {
@@ -335,11 +396,14 @@ public class MainActivity extends BaseActivity {
             }
         }
         File ad001 = new File(ytFileRootPath , YT_AD_FILE_DIR + "/" + FIRST_PLAY_AD + exist);
+        Log.i(TAG,"playFirstAD ytFileRootPath=="+ytFileRootPath+",ad001.getAbsolutePath()=="+ad001.getAbsolutePath());
         if(ad001 != null && ad001.exists()){
+            Log.i(TAG,"playFirstAD ad001.exists() ad001.getAbsolutePath()=="+ad001.getAbsolutePath());
             ytVideoView.setVideoPath(ad001.getAbsolutePath());
         }else {
 //            someError(NOT_VIDEO + "339");
             String next = getRandomVideoPath(CURRENT_VIDEO_FILE_DIR);
+            Log.i(TAG,"playFirstAD next=="+next);
             if(TextUtils.isEmpty(next)){
                 someError(NOT_VIDEO + "343");
                 ytVideoView.changePath("");
@@ -353,14 +417,15 @@ public class MainActivity extends BaseActivity {
      * 播放广告
      */
     private void playAD(){
-        Log.e("ZM","播放广告");
+        Log.e(TAG,"播放广告");
         imgError.setVisibility(View.GONE);
         tempPlayPosition = ytVideoView.getCurrentPosition();
-        Log.e("ZM","当前保存位置 = " + tempPlayPosition);
+        Log.e(TAG,"当前保存位置 = " + tempPlayPosition);
         if(tempPlayPosition < 5000){
             tempPlayPosition = 0;
         }
         tempPlayPath = ytVideoView.getVideoPath();
+        Log.e(TAG,"playAD tempPlayPath=="+tempPlayPath);
         if (!TextUtils.isEmpty(tempPlayPath)) {
             PreferenceUtils.commitString(SP_KEY_PLAY_PATH, tempPlayPath);
         }
@@ -374,7 +439,7 @@ public class MainActivity extends BaseActivity {
             //过滤掉AD001
             for (int i = 0; i < adFiles.length; i++) {
                 if(!adFiles[i].getName().contains(FIRST_PLAY_AD) && adFiles[i].getName().startsWith("AD")){
-                    Log.e("ZM","广告视频 = " + adFiles[i].getName());
+                    Log.e(TAG,"广告视频 = " + adFiles[i].getName());
                     adList.add(adFiles[i].getAbsolutePath());
                 }
             }
@@ -395,7 +460,7 @@ public class MainActivity extends BaseActivity {
      * 播放字幕
      */
     private void playText(){
-        Log.e("ZM","播放字幕");
+        Log.e(TAG,"播放字幕");
         if(TextUtils.isEmpty(textContent)){
             textContent = NOT_TEXT_CONTENT;
         }
@@ -425,8 +490,11 @@ public class MainActivity extends BaseActivity {
         ytVideoView.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             @Override
             public void onCompletion(MediaPlayer mp) {
-                Log.e("ZM","播放完成");
                 String videoPath = ytVideoView.getVideoPath();
+                Log.e(TAG,"播放完成 videoPath=="+videoPath);
+                ytFileRootPath="/storage/card";
+                //播放开机广告完成后，更新状态
+                PreferenceUtils.commitBoolean(SP_KEY_IS_PLAYING_AD,false);
                 //广告播完回到默认播放,如果是默认播完，随机播放VIDEO文件夹下的某个视频
                 if(isADVideo(videoPath)){
                     runADTimer(true);
@@ -579,9 +647,9 @@ public class MainActivity extends BaseActivity {
             case COM_27:
             case COM_28:
             case COM_29:
-            case COM_30:
-                selectVideoDir(comValue);
-                break;
+//            case COM_30:
+//                selectVideoDir(comValue);
+//                break;
         }
     }
 
@@ -605,8 +673,14 @@ public class MainActivity extends BaseActivity {
      */
     private void playNextOrPre(boolean isNext){
         runADTimer(true);
+        //if(!CURRENT_VIDEO_FILE_DIR.contains(ytFileRootPath))
+        CURRENT_VIDEO_FILE_DIR="/VIDEO/";
+        //Log.i(TAG,"playNextOrPre ytFileRootPath=="+ytFileRootPath+",CURRENT_VIDEO_FILE_DIR=="+CURRENT_VIDEO_FILE_DIR);
         File videoFile = new File(ytFileRootPath, CURRENT_VIDEO_FILE_DIR);
         File[] videoFiles = videoFile.listFiles();
+        //Log.i(TAG,"playNextOrPre videoFile.getPath()=="+videoFile.getPath()+"videoFiles=="+videoFiles);
+//        if(videoFiles != null)
+//        Log.i(TAG,"playNextOrPre videoFiles.length=="+videoFiles.length);
         ArrayList<String> fileList = new ArrayList<>();
         if(videoFiles != null && videoFiles.length > 0){
             for (int i = 0; i < videoFiles.length; i++) {
@@ -665,7 +739,25 @@ public class MainActivity extends BaseActivity {
         toDetail.putExtra("urlPath",PreferenceUtils.getString("selectPath",""));
         startActivityForResult(toDetail,1);
     }
-
+    private void toPlayList() {
+        if(isFileActivity){
+            return;
+        }
+        isFileActivity = true;
+        Intent toDetail = new Intent(this,PlayListActivity.class);
+        toDetail.putExtra("urlPath",PreferenceUtils.getString("selectPath",""));
+        startActivityForResult(toDetail,1);
+    }
+    private void gotoMusicActivity(){
+        Intent musicIntent = new Intent(this,MusicPlayActivity.class);
+        //musicIntent.
+        startActivity(musicIntent);
+    }
+    private void gotoPhotoActivity(){
+        Intent musicIntent = new Intent(this,PhotoViewActivity.class);
+        //musicIntent.
+        startActivity(musicIntent);
+    }
     //返回
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -676,11 +768,14 @@ public class MainActivity extends BaseActivity {
             return;
         }
         String urlPath = data.getStringExtra("selectPath");
+        String title=data.getStringExtra("title");
         if(requestCode == 1){
             isFileActivity = false;
-            String[] paths = urlPath.split("/");
-            String dirName = paths[paths.length - 2];
-            Log.e("ZM","选择的DIRNAME = " + dirName);
+//            String[] paths = urlPath.split("/");
+//            String dirName = paths[paths.length - 2];
+            int endindex=urlPath.indexOf(title);
+            String dirName=urlPath.substring(0,endindex);
+            Log.e(TAG,"选择的DIRNAME = " + dirName);
             CURRENT_VIDEO_FILE_DIR = dirName;
             PreferenceUtils.commitString(SP_KEY_PLAY_DIR,dirName);
             ytVideoView.setVideoPath(urlPath);
@@ -691,16 +786,17 @@ public class MainActivity extends BaseActivity {
         }
     }
 
-    private void selectVideoDir(int index){
+    private void selectVideoDir(String dirName){//int index
         if(isADVideo(ytVideoView.getVideoPath())){
             Toast.makeText(this,TEXT_NOTICE,Toast.LENGTH_LONG).show();
             return;
         }
         try {
-            if(index >= 20 && index <= 31){
-                index = index - 20;
-                String dirName = VIDEO_FILE_DIRS[index];
+//            if(index >= 20 && index <= 31){
+//                index = index - 20;
+                //String dirName = VIDEO_FILE_DIRS[index];
                 File videoFile = new File(ytFileRootPath, dirName);
+                Log.i(TAG,"selectVideoDir ytFileRootPath=="+ytFileRootPath+"dirName=="+dirName+",videoFile=="+videoFile.getPath());
                 File[] videoFiles = videoFile.listFiles();
                 if(videoFiles == null || videoFiles.length == 0){
                     Toast.makeText(this,NOT_VIDEO,Toast.LENGTH_LONG).show();
@@ -719,9 +815,9 @@ public class MainActivity extends BaseActivity {
                     PreferenceUtils.commitInt(SP_KEY_PLAY_TIME, tempPlayPosition);
                     Toast.makeText(this,"Switch to folder " + CURRENT_VIDEO_FILE_DIR,Toast.LENGTH_LONG).show();
                 }
-            }
+            //}
         }catch (Exception e){
-            Log.e("ZM",e.getMessage());
+            Log.e(TAG,e.getMessage());
         }
 
     }
@@ -730,6 +826,7 @@ public class MainActivity extends BaseActivity {
      * 找不到资源
      */
     private void someError(String error){
+        Log.i(TAG,"someError error=="+error);
         FileUtils.saveFileForError(error);
         imgError.setVisibility(View.VISIBLE);
         Toast.makeText(this,error,Toast.LENGTH_LONG).show();
@@ -792,10 +889,10 @@ public class MainActivity extends BaseActivity {
             adTimer = null;
         }
         if(!flag){
-            Log.e("ZM","取消广告定时");
+            Log.e(TAG,"取消广告定时");
             return;
         }
-        Log.e("ZM","开始广告定时");
+        Log.e(TAG,"开始广告定时");
         adTimer = new Timer();
         adTimer.schedule(new TimerTask() {
             @Override
@@ -815,10 +912,10 @@ public class MainActivity extends BaseActivity {
             textTimer = null;
         }
         if(!flag){
-            Log.e("ZM","取消字幕定时");
+            Log.e(TAG,"取消字幕定时");
             return;
         }
-        Log.e("ZM","开始字幕定时");
+        Log.e(TAG,"开始字幕定时");
         textTimer = new Timer();
         textTimer.schedule(new TimerTask() {
             @Override
@@ -831,19 +928,30 @@ public class MainActivity extends BaseActivity {
     private long timeLimit = 0;
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        Log.e("ZM","onKeyDown = " + keyCode);
+        Log.e(TAG,"MainActivity onKeyDown = " + keyCode);
+        //假如是播放广告状态，不响应onKeyDown事件
+        if(isADVideo(ytVideoView.getVideoPath())){
+            Toast.makeText(this,TEXT_NOTICE,Toast.LENGTH_LONG).show();
+            return true;
+        }
         //解决mediaPlayer黑屏、卡住问题
         if(System.currentTimeMillis() - timeLimit < 1000){
+            Log.e(TAG,"onKeyDown System.currentTimeMillis() - timeLimit < 1000 return true" + keyCode);
             return true;
         }
         timeLimit = System.currentTimeMillis();
 
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {//停止键
             if(isADVideo(ytVideoView.getVideoPath())){
                 Toast.makeText(this,TEXT_NOTICE,Toast.LENGTH_LONG).show();
                 return true;
             }
-            toFileSystem();
+            //toFileSystem();
+            //停止键保存播放记录并跳转到播放列表界面
+            saveVideoViewPosition();
+            doHandle05();
+            toPlayList();
+            Log.e(TAG,"MainActivity keyCode == 4 saveVideoViewPosition and toPlayList()...");
             return true;
         }else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
             if(isADVideo(ytVideoView.getVideoPath())){
@@ -863,41 +971,68 @@ public class MainActivity extends BaseActivity {
                 playNextOrPre(true);
             }
             return true;
-        }else if (keyCode == KeyEvent.KEYCODE_1) {
-            selectVideoDir(20);
+        }else if(keyCode ==9){
+            //audio键（歌曲2）退出视频播放状态并保存记忆状态,然后开始播放music 音频文件
+            saveVideoViewPosition();
+            doHandle05();
+            gotoMusicActivity();
+            Log.i(TAG,"MainActivity onKeyDown 9 pause Video save position to play Music...");
             return true;
-        }else if (keyCode == KeyEvent.KEYCODE_2) {
-            selectVideoDir(21);
+        }else if(keyCode ==10){
+            //photo键（歌曲3）退出视频播放状态并保存记忆状态,然后开始播放图片文件
+            saveVideoViewPosition();
+            doHandle05();
+            gotoPhotoActivity();
+            Log.i(TAG,"MainActivity 10 pause Video save position to play photo...");
             return true;
-        }else if (keyCode == KeyEvent.KEYCODE_3) {
-            selectVideoDir(22);
-            return true;
-        }else if (keyCode == KeyEvent.KEYCODE_4) {
-            selectVideoDir(23);
-            return true;
-        }else if (keyCode == KeyEvent.KEYCODE_5) {
-            selectVideoDir(24);
-            return true;
-        }else if (keyCode == KeyEvent.KEYCODE_6) {
-            selectVideoDir(25);
-            return true;
-        }else if (keyCode == KeyEvent.KEYCODE_7) {
-            selectVideoDir(26);
-            return true;
-        }else if (keyCode == KeyEvent.KEYCODE_8) {
-            selectVideoDir(27);
-            return true;
-        }else if (keyCode == KeyEvent.KEYCODE_9) {
-            selectVideoDir(28);
-            return true;
-        }else if (keyCode == KeyEvent.KEYCODE_0) {
-            selectVideoDir(29);
-            return true;
-        }else if (keyCode == KeyEvent.KEYCODE_STAR) {
-            selectVideoDir(30);
-            return true;
-        }else if (keyCode == 84) {
-            selectVideoDir(31);
+        }
+        else if(keyCode==17){
+            //电影6键保存记忆状态
+            saveVideoViewPosition();
+            doHandle05();
+        }
+//        else if (keyCode == KeyEvent.KEYCODE_1) {
+//            selectVideoDir(20);
+//            return true;
+//        }else if (keyCode == KeyEvent.KEYCODE_2) {
+//            selectVideoDir(21);
+//            return true;
+//        }else if (keyCode == KeyEvent.KEYCODE_3) {
+//            selectVideoDir(22);
+//            return true;
+//        }else if (keyCode == KeyEvent.KEYCODE_4) {
+//            selectVideoDir(23);
+//            return true;
+//        }else if (keyCode == KeyEvent.KEYCODE_5) {
+//            selectVideoDir(24);
+//            return true;
+//        }else if (keyCode == KeyEvent.KEYCODE_6) {
+//            selectVideoDir(25);
+//            return true;
+//        }
+//        else if (keyCode == KeyEvent.KEYCODE_7) {
+//            selectVideoDir(26);
+//            return true;
+//        }else if (keyCode == KeyEvent.KEYCODE_8) {
+//            selectVideoDir(27);
+//            return true;
+//        }else if (keyCode == KeyEvent.KEYCODE_9) {
+//            selectVideoDir(28);
+//            return true;
+//        }
+//        else if (keyCode == KeyEvent.KEYCODE_0) {
+//            selectVideoDir(29);
+//            return true;
+//        }else if (keyCode == KeyEvent.KEYCODE_STAR) {
+//            selectVideoDir(30);
+//            return true;
+//        }
+        else if (keyCode == 84) {
+            ytFileRootPath = Environment.getExternalStorageDirectory().getAbsolutePath();
+            selectVideoDir(YT_AD_FILE_DIR);
+            //小品键，播放AD文件夹内的视频广告文件
+            Log.i(TAG,"小品键，播放AD视频...");
+            //ytVideoView.setVideoPath("storage/emulated/0/AD/AD001.mp4");
             return true;
         }else if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
             if(isADVideo(ytVideoView.getVideoPath())){
@@ -906,14 +1041,17 @@ public class MainActivity extends BaseActivity {
             }
             doHandle05();
             return true;
-        }else if (keyCode == KeyEvent.KEYCODE_MENU) {
-            if(isADVideo(ytVideoView.getVideoPath())){
-                Toast.makeText(this,TEXT_NOTICE,Toast.LENGTH_LONG).show();
-                return true;
-            }
-            toFileSystem();
-            return true;
-        }else if (keyCode == 265) {
+        }
+        //已经在BaseActivity处理，此处不处理
+//        else if (keyCode == KeyEvent.KEYCODE_MENU) {
+//            if(isADVideo(ytVideoView.getVideoPath())){
+//                Toast.makeText(this,TEXT_NOTICE,Toast.LENGTH_LONG).show();
+//                return true;
+//            }
+//            toFileSystem();
+//            return true;
+//        }
+        else if (keyCode == 265) {
             if(isADVideo(ytVideoView.getVideoPath())){
                 Toast.makeText(this,TEXT_NOTICE,Toast.LENGTH_LONG).show();
                 return true;
@@ -963,6 +1101,9 @@ public class MainActivity extends BaseActivity {
             ytVideoView.forWard(60);
 
             return true;
+        }else if(keyCode==14 || keyCode==15 || keyCode==16){
+            Log.e(TAG,"onKeyDown keyCode==14 || keyCode==15 || keyCode==16 super.onKeyDown keyCode=" + keyCode);
+            return super.onKeyDown(keyCode, event);
         }
         return super.onKeyDown(keyCode, event);
     }

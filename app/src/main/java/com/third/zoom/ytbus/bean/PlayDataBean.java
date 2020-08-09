@@ -22,8 +22,19 @@ public class PlayDataBean {
     //字幕内容
     private String textContent;
 
-    //字幕内容
+    //外部存储,配置这个参数表示外部优先，配置了此参数、
+    //	外部SD卡必须有视频资源，否则会提示没有视频资源
     private String playVideoPath;
+
+    private String isPlayAD;
+
+    public String getIsPlayAD() {
+        return isPlayAD;
+    }
+
+    public void setIsPlayAD(String playAD) {
+        isPlayAD = playAD;
+    }
 
     public String getPlayVideoPath() {
         return playVideoPath;

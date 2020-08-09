@@ -70,6 +70,8 @@ public class ParseFileUtil {
 
                             }else if(xmlPullParser.getName().equals("PLAY_VIDEO_PATH")){
                                 playDataBean.setPlayVideoPath(xmlPullParser.nextText());
+                            }else if(xmlPullParser.getName().equals("IS_PLAY_AD")){
+                                playDataBean.setIsPlayAD(xmlPullParser.nextText());
                             }
                         }
                         break;

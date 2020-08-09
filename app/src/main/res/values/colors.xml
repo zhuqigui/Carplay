@@ -3,6 +3,13 @@
     <color name="colorPrimary">#3F51B5</color>
     <color name="colorPrimaryDark">#303F9F</color>
     <color name="colorAccent">#FF4081</color>
+    <!-- item背景所需要的颜色值 -->
+    <color name="bg_selected">#ffff0000</color><!-- 红色 -->
+    <color name="bg_pressed">#ffFFB6C1</color><!-- 粉色 -->
+    <color name="bg_normal">#ff00ff00</color><!-- 绿色 -->
+    <!-- item中textview所需要的颜色值 -->
+    <color name="text_normal">#ff000000</color><!-- 黑色 -->
+    <color name="text_pressed">#ffffffff</color><!-- 白色 -->
 
 
     <color name="tab_normal">#9dbcb9</color>
@@ -23,5 +30,6 @@
     <color name="txt_focus_2">#0e20e9</color>
 
     <color name="txt_black">#000000</color>
+    <color name="cycle_image_bg">#44222222</color>
 
 </resources>

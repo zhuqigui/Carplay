@@ -385,4 +385,5 @@
     <dimen name="DIMEN_35sp">35sp</dimen>
     <dimen name="DIMEN_40sp">40sp</dimen>
     <dimen name="DIMEN_70sp">70sp</dimen>
+    <dimen name="fab_margin">16dp</dimen>
 </resources>

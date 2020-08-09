@@ -6,5 +6,6 @@
     <string name="main_tab_title_hot">热水</string>
     <string name="main_tab_title_normal">常温水</string>
     <string name="main_tab_title_about">关于本机</string>
+    <string name="title_activity_music_play">MusicPlayActivity</string>
 
 </resources>
